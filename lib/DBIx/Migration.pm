@@ -1,20 +1,121 @@
 package DBIx::Migration;
 
-use strict;
-use base qw/Class::Accessor::Fast/;
+use Moose;
+
 use DBI;
 use File::Slurp;
 use File::Spec;
+use Try::Tiny;
+use File::Temp qw/tempfile/;
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
-__PACKAGE__->mk_accessors(qw/debug dir dsn password username dbh/);
+has 'debug' => (
+    is  => 'ro',
+    isa => 'Any',
+);
+
+has 'dir' => (
+    is       => 'rw',
+    isa      => 'Str',
+    required => 1,
+);
+
+has 'dsn' => (
+    is       => 'ro',
+    isa      => 'Str',
+    required => 1,
+);
+
+has 'password' => (
+    is       => 'ro',
+    isa      => 'Str',
+    required => 0,
+);
+
+has 'username' => (
+    is       => 'ro',
+    isa      => 'Str',
+    required => 0,
+);
+
+=head1 VERY IMPORTANT NOTE
+
+ schema_branch is a concept to let Migration package work on several branch AND main branch of schema changes.
+ In some situations like that we want to maintain several DB and not all of them need the same set of changes,
+ those INDEPENDENT changes can go to a branch.
+
+ Like when we have a report DB and that DB need many specific indices and extra defined functions to work we can create "report" schema branch for that reason.
+
+ Branch directory lives is a sub-dir of main directory.
+
+ branch changes should be applied after main changes.
+
+ branch depends on main schemas but NO MAIN SCHEMA CHANGE-SET should depend on any branch schema.
+
+=cut
+
+has 'tablename_extension' => (
+    is      => 'ro',
+    isa     => 'Str',
+    default => '',
+);
+
+has 'schema_branch' => (
+    is      => 'ro',
+    isa     => 'Str',
+    default => '',
+);
+
+has '_tablename' => (
+    is      => 'rw',
+    isa     => 'Str',
+    default => 'dbix_migration',
+);
+
+sub BUILD {
+    my $self = shift;
+
+    if ($self->schema_branch) {
+        $self->_tablename($self->_tablename . '_' . $self->schema_branch);
+        $self->dir($self->dir . $self->schema_branch . '/');
+    } elsif ($self->tablename_extension) {
+        $self->_tablename($self->_tablename . '_' . $self->tablename_extension);
+    }
+    return;
+}
+
+=head1 VERY IMPORTANT NOTE
+
+	This package is actually DBIx::Migration package from cpan.
+
+	I have contacted the maintainer of the package and I will try to become maintainer of this package if there was no answer.
+
+	As soon as the bug is fixed in the main package we must get rid of this local package and use the cpan module instead.
+
+	BUG: The bug was because of split/;/. In the main package split based on ";" breaks the file into parts that are not valid for postgres functions.
+
+	ORIGINAL version: "0.05"
 
 =head1 NAME
 
 DBIx::Migration - Seamless DB schema up- and downgrades
 
 =head1 SYNOPSIS
+
+    #Use sampple with a "report" schema branch
+    my $m = DBIx::Migration->new({
+        'dsn' => 'dbi:Pg:dbname='
+        . $database_connection->{'database'}
+        . ';host='
+        . $database_connection->{'host'}
+        . ';port='
+        . $database_connection->{'port'},
+        'dir'      => $database_connection->{'versions_dir'},
+        'username' => $database_connection->{'username'},
+        'password' => $database_connection->{'password'},
+        'schema_branch' => 'report',
+    });
 
     # migrate.pl
     my $m = DBIx::Migration->new(
@@ -65,10 +166,6 @@ Get/Set directory.
 
 Get/Set dsn.
 
-=item $self->dbh($dsn)
-
-Get/Set dbh.
-
 =item $self->migrate($version)
 
 Migrate database to version.
@@ -76,16 +173,16 @@ Migrate database to version.
 =cut
 
 sub migrate {
-    my ( $self, $wanted ) = @_;
+    my ($self, $wanted) = @_;
     $self->_connect;
     $wanted = $self->_newest unless defined $wanted;
     my $version = $self->_version;
-    if ( defined $version && ( $wanted eq $version ) ) {
+    if (defined $version && ($wanted eq $version)) {
         print "Database is already at version $wanted\n" if $self->debug;
         return 1;
     }
 
-    unless ( defined $version ) {
+    unless (defined $version) {
         $self->_create_migration_table;
         $version = 0;
     }
@@ -93,40 +190,45 @@ sub migrate {
     # Up- or downgrade
     my @need;
     my $type = 'down';
-    if ( $wanted > $version ) {
+    if ($wanted > $version) {
         $type = 'up';
         $version += 1;
         @need = $version .. $wanted;
-    }
-    else {
+    } else {
         $wanted += 1;
-        @need = reverse( $wanted .. $version );
+        @need = reverse($wanted .. $version);
     }
-    my $files = $self->_files( $type, \@need );
-    if ( defined $files ) {
+
+    my $files = $self->_files($type, \@need);
+    if (defined $files) {
         for my $file (@$files) {
             my $name = $file->{name};
             my $ver  = $file->{version};
             print qq/Processing "$name"\n/ if $self->debug;
             next unless $file;
-            my $text = read_file($name);
-            $text =~ s/\s*--.*$//g;
-            for my $sql ( split /;/, $text ) {
+
+            if ($self->{_dbh}->{Driver}->{Name} eq 'Pg') {
+                $self->psql($name);    # dies on error
+            } else {
+                my $text = read_file($name);
+
+                my $sql = $text;
                 next unless $sql =~ /\w/;
                 print "$sql\n" if $self->debug;
                 $self->{_dbh}->do($sql);
-                if ( $self->{_dbh}->err ) {
+                if ($self->{_dbh}->err) {
                     die "Database error: " . $self->{_dbh}->errstr;
                 }
             }
-            $ver -= 1 if ( ( $ver > 0 ) && ( $type eq 'down' ) );
+
+            $ver -= 1 if (($ver > 0) && ($type eq 'down'));
             $self->_update_migration_table($ver);
         }
-    }
-    else {
+    } else {
         my $newver = $self->_version;
-        print "Database is at version $newver, couldn't migrate to $wanted\n"
-          if ( $self->debug && ( $wanted != $newver ) );
+        print "MIGRATION DID NOT OCCUR\n";
+        print "Database is at version [$newver], did not migrate to [$wanted]\n";
+        print "No files, bad files, or no migration versions.\n";
         return 0;
     }
     $self->_disconnect;
@@ -157,7 +259,6 @@ sub version {
 
 sub _connect {
     my $self = shift;
-    return $self->{_dbh}= $self->dbh->clone if $self->dbh;
     $self->{_dbh} = DBI->connect(
         $self->dsn,
         $self->username,
@@ -166,51 +267,114 @@ sub _connect {
             RaiseError => 0,
             PrintError => 0,
             AutoCommit => 1
-        }
-      )
-      or die qq/Couldn't connect to database, "$!"/;
-    $self->dbh($self->{_dbh})
+        }) or die "Couldn't connect to database: ", $DBI::errstr;
+
+    return;
+}
+
+sub psql {
+    my ($self, $filename) = @_;
+
+    my ($fh, $fn) = tempfile undef, UNLINK => 1;
+    $fh->autoflush(1);
+
+    my ($dbname, $dbuser, $dbhost, $dbport, $dbpass) = @{$self->{_dbh}}{qw/pg_db pg_user pg_host pg_port pg_pass/};
+
+    local @ENV{qw/PGPASSFILE PGHOST PGPORT PGDATABASE PGUSER/} = ($fn, $dbhost, $dbport, $dbname, $dbuser);
+    print $fh "$dbhost:$dbport:$dbname:$dbuser:$dbpass\n";
+
+    local $SIG{PIPE} = 'IGNORE';
+
+    my $pid = open my $psql_in, '|-';    ## no critic
+    die "Cannot start psql: $!\n" unless defined $pid;
+    unless ($pid) {
+        open STDOUT, '>', '/dev/null' or warn "Cannot open /dev/null: $!\n";
+        exec qw/psql -q -v ON_ERROR_STOP=1/;
+        warn "Cannot exec psql: $!\n";
+        CORE::exit 254;
+    }
+
+    print $psql_in "SET client_min_messages TO warning;\n\\i $filename\n" or die "Cannot write to psql: $!\n";
+    close $psql_in and return;
+
+    $! and die "Cannot write to psql: $!\n";
+
+    my $sig = $? & 0x7f;    # ignore the highest bit which indicates a coredump
+    die "psql killed by signal $sig" if $sig;
+
+    my $rc = $? >> 8;
+    die "psql returns 1 (out of memory, file not found or similar)\n" if $rc == 1;
+    die "psql returns 2 (connection problem)\n"                       if $rc == 2;
+    die "psql returns 3 (script error)\n"                             if $rc == 3;
+    die "cannot exec psql\n"                                          if $rc == 254;
+    die "psql returns unexpected code $rc\n";
 }
 
 sub _create_migration_table {
     my $self = shift;
+
+    my $extra_sql = $self->dsn =~ /Pg/ ? 'SET client_min_messages = warning;' : '';
+    my $tablename = $self->_tablename;
     $self->{_dbh}->do(<<"EOF");
-CREATE TABLE dbix_migration (
-    name CHAR(64) PRIMARY KEY,
-    value CHAR(64)
+$extra_sql
+CREATE TABLE $tablename (
+    name VARCHAR(64) PRIMARY KEY,
+    value VARCHAR(64)
 );
 EOF
     $self->{_dbh}->do(<<"EOF");
-    INSERT INTO dbix_migration ( name, value ) VALUES ( 'version', '0' );
+    INSERT INTO $tablename ( name, value ) VALUES ( 'version', '0' );
 EOF
+
+    return;
 }
 
 sub _disconnect {
     my $self = shift;
     $self->{_dbh}->disconnect;
+
+    return;
 }
 
 sub _files {
-    my ( $self, $type, $need ) = @_;
+    my ($self, $type, $need) = @_;
     my @files;
     for my $i (@$need) {
-        opendir(DIR, $self->dir) or die $!;
+        my $dir = $self->dir;
+        opendir(DIR, $dir) or die "opening _files dir $dir: $!";
         while (my $file = readdir(DIR)) {
-            next unless $file =~ /(^|\D)${i}_$type\.sql$/;
+            # There is another change, previously this line was a comparision like:
+            # $file =~ /${i}_$type\.sql$/.
+            # It was including all files like .-test_10_up.sql in the list.
+            # As some editors create these kind of files in the directory when editing a file
+            # it was making trouble.
+            # This is a small patch with as little change as possible until we can find the author or
+            # become maintaner of the code in CPAN.
+            next unless $file =~ /^schema_${i}_$type\.sql$/;
             $file = File::Spec->catdir($self->dir, $file);
-            push @files, { name => $file, version => $i };
+            push @files,
+                {
+                name    => $file,
+                version => $i
+                };
         }
         closedir(DIR);
     }
-    return undef unless @$need == @files;
-    return @files ? \@files : undef;
+    return unless @$need == @files;
+
+    if (@files) {
+        return \@files;
+    } else {
+        return;
+    }
 }
 
 sub _newest {
     my $self   = shift;
     my $newest = 0;
 
-    opendir(DIR, $self->dir) or die $!;
+    my $dir = $self->dir;
+    opendir(DIR, $dir) or die "opening _newest dir $dir: $!";
     while (my $file = readdir(DIR)) {
         next unless $file =~ /_up\.sql$/;
         $file =~ /\D*(\d+)_up.sql$/;
@@ -222,21 +386,25 @@ sub _newest {
 }
 
 sub _update_migration_table {
-    my ( $self, $version ) = @_;
+    my ($self, $version) = @_;
+    my $tablename = $self->_tablename;
     $self->{_dbh}->do(<<"EOF");
-UPDATE dbix_migration SET value = '$version' WHERE name = 'version';
+UPDATE $tablename SET value = '$version' WHERE name = 'version';
 EOF
+
+    return;
 }
 
 sub _version {
-    my $self    = shift;
-    my $version = undef;
-    eval {
+    my $self      = shift;
+    my $version   = undef;
+    my $tablename = $self->_tablename;
+    try {
         my $sth = $self->{_dbh}->prepare(<<"EOF");
-SELECT value FROM dbix_migration WHERE name = ?;
+SELECT value FROM $tablename WHERE name = ?;
 EOF
         $sth->execute('version');
-        for my $val ( $sth->fetchrow_arrayref ) {
+        for my $val ($sth->fetchrow_arrayref) {
             $version = $val->[0];
         }
     };

@@ -7,9 +7,10 @@ use DBI;
 eval { require DBD::SQLite };
 my $class = $@ ? 'SQLite2' : 'SQLite';
 
-my $m = DBIx::Migration->new;
-$m->dsn("dbi:$class:dbname=./t/sqlite_test");
-$m->dir('./t/sql/');
+my $m = DBIx::Migration->new({
+    dsn => "dbi:$class:dbname=./t/sqlite_test",
+    dir => './t/sql/'
+});
 is( $m->version, undef );
 
 $m->migrate(1);
@@ -30,7 +31,10 @@ is( $m->version, 2 );
 $m->migrate(0);
 is( $m->version, 0 );
 
-my $m2 = DBIx::Migration->new({dbh=>$m->dbh,dir=>'./t/sql/'});
+my $m2 = DBIx::Migration->new({
+    dsn => "dbi:$class:dbname=./t/sqlite_test",
+    dir=>'./t/sql/'
+});
 
 is($m2->version,0);
 
