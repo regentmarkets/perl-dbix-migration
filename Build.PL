@@ -10,7 +10,8 @@ my $build = Module::Build->new(
         'File::Spec'            => 0,
         'DBI'                   => 0,
         'DBD::SQLite'           => 0,
-        'Class::Accessor::Fast' => 0
+        'Moose'                 => 0,
+        'Try::Tiny'             => 0,
     },
     create_readme => 1,
     script_files  => [ glob('script/*') ],

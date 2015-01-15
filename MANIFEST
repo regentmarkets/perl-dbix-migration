@@ -14,3 +14,4 @@ t/sql/schema_1_down.sql
 t/sql/schema_1_up.sql
 t/sql/schema_2_down.sql
 t/sql/schema_2_up.sql
+META.json

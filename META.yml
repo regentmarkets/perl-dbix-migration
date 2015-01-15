@@ -1,25 +1,28 @@
 ---
-name: DBIx-Migration
-version: 0.07
+abstract: 'Seamless DB schema up- and downgrades'
 author:
   - 'Sebastian Riedel, C<sri@oook.de>'
-abstract: 'Seamless DB schema up- and downgrades'
-license: perl
-resources:
-  license: http://dev.perl.org/licenses/
-requires:
-  Class::Accessor::Fast: 0
-  DBD::SQLite: 0
-  DBI: 0
-  File::Slurp: 0
-  File::Spec: 0
+build_requires: {}
 configure_requires:
-  Module::Build: 0.340201
+  Module::Build: '0.42'
+dynamic_config: 1
+generated_by: 'Module::Build version 0.421, CPAN::Meta::Converter version 2.142690'
+license: perl
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: '1.4'
+name: DBIx-Migration
 provides:
   DBIx::Migration:
     file: lib/DBIx/Migration.pm
-    version: 0.07
-generated_by: Module::Build version 0.340201
-meta-spec:
-  url: http://module-build.sourceforge.net/META-spec-v1.4.html
-  version: 1.4
+    version: '0.08'
+requires:
+  DBD::SQLite: '0'
+  DBI: '0'
+  File::Slurp: '0'
+  File::Spec: '0'
+  Moose: '0'
+  Try::Tiny: '0'
+resources:
+  license: http://dev.perl.org/licenses/
+version: '0.08'
