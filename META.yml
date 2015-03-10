@@ -6,7 +6,7 @@ build_requires: {}
 configure_requires:
   Module::Build: '0.42'
 dynamic_config: 1
-generated_by: 'Module::Build version 0.421, CPAN::Meta::Converter version 2.142690'
+generated_by: 'Module::Build version 0.421, CPAN::Meta::Converter version 2.143240'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -15,7 +15,7 @@ name: DBIx-Migration
 provides:
   DBIx::Migration:
     file: lib/DBIx/Migration.pm
-    version: '0.08'
+    version: '0.09'
 requires:
   DBD::SQLite: '0'
   DBI: '0'
@@ -25,4 +25,4 @@ requires:
   Try::Tiny: '0'
 resources:
   license: http://dev.perl.org/licenses/
-version: '0.08'
+version: '0.09'

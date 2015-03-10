@@ -8,7 +8,7 @@ use File::Spec;
 use Try::Tiny;
 use File::Temp qw/tempfile/;
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 has 'debug' => (
     is  => 'ro',
@@ -273,11 +273,12 @@ sub _connect {
 }
 
 sub psql {
-    my ($self, $filename) = @_;
+    my ($self, @filenames) = @_;
 
     my ($fh, $fn) = tempfile undef, UNLINK => 1;
     $fh->autoflush(1);
 
+    $self->_connect unless $self->{_dbh}->{Active};
     my ($dbname, $dbuser, $dbhost, $dbport, $dbpass) = @{$self->{_dbh}}{qw/pg_db pg_user pg_host pg_port pg_pass/};
 
     local @ENV{qw/PGPASSFILE PGHOST PGPORT PGDATABASE PGUSER/} = ($fn, $dbhost, $dbport, $dbname, $dbuser);
@@ -294,7 +295,10 @@ sub psql {
         CORE::exit 254;
     }
 
-    print $psql_in "SET client_min_messages TO warning;\n\\i $filename\n" or die "Cannot write to psql: $!\n";
+    print $psql_in "SET client_min_messages TO warning;\n" or die "Cannot write to psql: $!\n";
+    for my $name (@filenames) {
+        print $psql_in "\\i $name\n" or die "Cannot write to psql: $!\n";
+    }
     close $psql_in and return;
 
     $! and die "Cannot write to psql: $!\n";
@@ -376,8 +380,7 @@ sub _newest {
     my $dir = $self->dir;
     opendir(DIR, $dir) or die "opening _newest dir $dir: $!";
     while (my $file = readdir(DIR)) {
-        next unless $file =~ /_up\.sql$/;
-        $file =~ /\D*(\d+)_up.sql$/;
+        next unless $file =~ /^schema_(\d+)_up\.sql$/;
         $newest = $1 if $1 > $newest;
     }
     closedir(DIR);
