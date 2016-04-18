@@ -272,14 +272,14 @@ sub _connect {
     return;
 }
 
-sub psql {
-    my ($self, @filenames) = @_;
+sub psql_full {
+    my ($self, @cmd_before, @cmd_after, @filenames) = @_;
 
     my ($fh, $fn) = tempfile undef, UNLINK => 1;
     $fh->autoflush(1);
 
     $self->_connect unless $self->{_dbh}->{Active};
-    my ($dbname, $dbuser, $dbhost, $dbport, $dbpass) = @{$self->{_dbh}}{qw/pg_db pg_user pg_host pg_port pg_pass/};
+    my ($dbname, $dbuser, $dbhost, $dbport, $dbpass) = @{$self->{_dbh}}{qw/pg_db pg_ user pg_host pg_port pg_pass/};
 
     local @ENV{qw/PGPASSFILE PGHOST PGPORT PGDATABASE PGUSER/} = ($fn, $dbhost, $dbport, $dbname, $dbuser);
     print $fh "$dbhost:$dbport:$dbname:$dbuser:$dbpass\n";
@@ -296,8 +296,14 @@ sub psql {
     }
 
     print $psql_in "SET client_min_messages TO warning;\n" or die "Cannot write to psql: $!\n";
+    if ($cmd_before) {
+    	 print $psql_in "$cmd_before;\n" or die "Cannot write to psql: $!\n";
+    }
     for my $name (@filenames) {
         print $psql_in "\\i $name\n" or die "Cannot write to psql: $!\n";
+    }
+    if ($cmd_after) {
+    	 print $psql_in "$cmd_after;\n" or die "Cannot write to psql: $!\n";
     }
     close $psql_in and return;
 
@@ -312,6 +318,12 @@ sub psql {
     die "psql returns 3 (script error)\n"                             if $rc == 3;
     die "cannot exec psql\n"                                          if $rc == 254;
     die "psql returns unexpected code $rc\n";
+}
+
+sub psql {
+    my ($self, @filenames) = @_;
+
+    return $self->psql_full(undef, undef, @filenames)
 }
 
 sub _create_migration_table {
