@@ -323,7 +323,7 @@ sub psql_full {
 sub psql {
     my ($self, @filenames) = @_;
 
-    return $self->psql_full(undef, undef, @filenames)
+    return $self->psql_full(undef, undef, @filenames);
 }
 
 sub _create_migration_table {
