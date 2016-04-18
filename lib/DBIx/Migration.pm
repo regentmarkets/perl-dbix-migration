@@ -273,7 +273,7 @@ sub _connect {
 }
 
 sub psql_full {
-    my ($self, @cmd_before, @cmd_after, @filenames) = @_;
+    my ($self, $cmd_before, $cmd_after, @filenames) = @_;
 
     my ($fh, $fn) = tempfile undef, UNLINK => 1;
     $fh->autoflush(1);
