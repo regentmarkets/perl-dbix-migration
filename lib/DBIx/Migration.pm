@@ -8,7 +8,7 @@ use File::Spec;
 use Try::Tiny;
 use File::Temp qw/tempfile/;
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 has 'debug' => (
     is  => 'ro',
