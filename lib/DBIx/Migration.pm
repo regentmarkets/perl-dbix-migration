@@ -274,6 +274,8 @@ sub _connect {
 
 sub psql {
     my ($self, @filenames) = @_;
+    my %options;
+    %options = %{shift @filenames} if ref $filenames[0];
 
     my ($fh, $fn) = tempfile undef, UNLINK => 1;
     $fh->autoflush(1);
@@ -296,8 +298,14 @@ sub psql {
     }
 
     print $psql_in "SET client_min_messages TO warning;\n" or die "Cannot write to psql: $!\n";
+    if ($options{before}) {
+    	 print $psql_in "$options{before};\n" or die "Cannot write to psql: $!\n";
+    }
     for my $name (@filenames) {
         print $psql_in "\\i $name\n" or die "Cannot write to psql: $!\n";
+    }
+    if ($options{after}) {
+    	 print $psql_in "$options{after};\n" or die "Cannot write to psql: $!\n";
     }
     close $psql_in and return;
 
