@@ -1,5 +1,8 @@
 This file documents the revision history for Perl extension DBIx::Migration.
 
+0.10 2016-04-20
+     - add before & after option to psql during \i sql file
+
 0.09 2015-03-09
      - make psql() accept multiple files
      - make schema file selection more specific
