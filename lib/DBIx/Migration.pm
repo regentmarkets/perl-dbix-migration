@@ -298,13 +298,13 @@ sub psql {
     }
 
     print $psql_in "SET client_min_messages TO warning;\n" or die "Cannot write to psql: $!\n";
-    if ($options->before) {
+    if ($options{before}) {
     	 print $psql_in "$options{before};\n" or die "Cannot write to psql: $!\n";
     }
     for my $name (@filenames) {
         print $psql_in "\\i $name\n" or die "Cannot write to psql: $!\n";
     }
-    if ($options->after) {
+    if ($options{after}) {
     	 print $psql_in "$options{after};\n" or die "Cannot write to psql: $!\n";
     }
     close $psql_in and return;
