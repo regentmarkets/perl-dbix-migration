@@ -275,7 +275,7 @@ sub _connect {
 sub psql {
     my ($self, @filenames) = @_;
     my %options;
-    %options = @{shift @filenames} if ref $filenames[0];
+    %options = @{shift %filenames} if ref $filenames[0];
 
     my ($fh, $fn) = tempfile undef, UNLINK => 1;
     $fh->autoflush(1);
