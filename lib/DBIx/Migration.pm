@@ -6,7 +6,7 @@ use DBI;
 use File::Slurp;
 use File::Spec;
 use Try::Tiny;
-use File::Temp qw/tempfile/;
+use File::Temp;
 
 our $VERSION = '0.10';
 
@@ -277,13 +277,13 @@ sub psql {
     my %options;
     %options = %{shift @filenames} if ref $filenames[0];
 
-    my ($fh, $fn) = tempfile undef, UNLINK => 1;
+    my $fh = File::Temp->new;
     $fh->autoflush(1);
 
     $self->_connect unless $self->{_dbh}->{Active};
     my ($dbname, $dbuser, $dbhost, $dbport, $dbpass) = @{$self->{_dbh}}{qw/pg_db pg_user pg_host pg_port pg_pass/};
 
-    local @ENV{qw/PGPASSFILE PGHOST PGPORT PGDATABASE PGUSER/} = ($fn, $dbhost, $dbport, $dbname, $dbuser);
+    local @ENV{qw/PGPASSFILE PGHOST PGPORT PGDATABASE PGUSER/} = ($fh->filename, $dbhost, $dbport, $dbname, $dbuser);
     print $fh "$dbhost:$dbport:$dbname:$dbuser:$dbpass\n";
 
     local $SIG{PIPE} = 'IGNORE';
