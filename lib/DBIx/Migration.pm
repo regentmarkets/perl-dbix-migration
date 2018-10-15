@@ -288,6 +288,11 @@ sub psql {
 
     local $SIG{PIPE} = 'IGNORE';
 
+    # psql on Debian is a Perl wrapper script, ensure this doesn't carry
+    # any extra environment variables that might reference outside of
+    # Debian's /usr/bin/perl
+    delete @ENV{qw(PERL5OPT PERL5LIB)};
+
     my $pid = open my $psql_in, '|-';    ## no critic
     die "Cannot start psql: $!\n" unless defined $pid;
     unless ($pid) {
